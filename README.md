@@ -1,27 +1,99 @@
 # GmapApiExternalLoadkey
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 11.2.14.
+ "@agm/core": "^3.0.0-beta.0"
+"@types/googlemaps": "3.39.12",
 
-## Development server
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The app will automatically reload if you change any of the source files.
+Google Api key is load from external config from api/config ( http-server -o --cors api/config)
 
-## Code scaffolding
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+Replace with your api key on config.json 
+```
+{
+  "googleApiKey":"REPLACEWITHYOURKEY"
+}
 
-## Build
+```
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory. Use the `--prod` flag for a production build.
+initconfigService load config file with APP_INITIALIZER 
 
-## Running unit tests
+```
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
 
-## Running end-to-end tests
+ export function StartupServiceFactory(initconfigService: InitconfigService) {
+      return () => initconfigService.load();
+    }
 
-Run `ng e2e` to execute the end-to-end tests via [Protractor](http://www.protractortest.org/).
 
-## Further help
+@NgModule({
+  declarations: [
+    AppComponent
+  ],
+  imports: [
+    BrowserModule,
+    AppRoutingModule,
+    HttpClientModule,
+    AgmCoreModule.forRoot()
+  ],
+  providers: [
+    {
+      provide: LAZY_MAPS_API_CONFIG,
+      useClass: MapsConfig,
+      deps: [InitconfigService]
+    },
+    { provide: APP_INITIALIZER, useFactory: StartupServiceFactory, deps: [InitconfigService], multi: true}
 
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+  ],
+  bootstrap: [AppComponent]
+})
+export class AppModule { }
+
+```
+
+
+```
+
+@Injectable({
+  providedIn: 'root'
+})
+export class InitconfigService {
+  _config$: BehaviorSubject<any> = new BehaviorSubject<any>(null);
+;
+
+  constructor(private http: HttpClient) {
+
+   }
+
+   load(){
+     return this.http.get('http://localhost:8080/api/config.json').toPromise().then(
+      (data:any) => {
+        console.log(data)
+        this._config$.next(data)
+      }
+    )
+   }
+
+   getKey(){
+     return this._config$.value.googleApiKey
+   }
+
+}
+```
+
+
+
+MapsConfig provide apiKey from config from initconfigService ( provide in appModule )
+
+```
+@Injectable()
+export class MapsConfig implements LazyMapsAPILoaderConfigLiteral{
+  public apiKey: string
+  public libraries: string[]
+  constructor(private initconfigService: InitconfigService) {
+    this.apiKey = this.initconfigService.getKey()
+    console.log(this.apiKey)
+    this.libraries = ['places']
+    console.log("lazy map init with " + this.apiKey)
+  }
+}
+```
